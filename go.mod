@@ -1,4 +1,4 @@
-module github.com/NewestUser/github-workflow-dashboard
+module github.com/newestuser/github-workflow-dashboard
 
 go 1.17
 

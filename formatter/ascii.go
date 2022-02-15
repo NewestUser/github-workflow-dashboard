@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/NewestUser/github-workflow-dashboard/github"
+	"github.com/newestuser/github-workflow-dashboard/github"
 	"github.com/olekukonko/tablewriter"
 )
 

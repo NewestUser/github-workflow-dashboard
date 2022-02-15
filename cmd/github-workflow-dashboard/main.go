@@ -11,13 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NewestUser/github-workflow-dashboard/backend"
-	"github.com/NewestUser/github-workflow-dashboard/formatter"
-	"github.com/NewestUser/github-workflow-dashboard/github"
+	"github.com/newestuser/github-workflow-dashboard/backend"
+	"github.com/newestuser/github-workflow-dashboard/formatter"
+	"github.com/newestuser/github-workflow-dashboard/github"
 	"golang.org/x/oauth2"
 )
-
-
 
 const Version = "0.1"
 const ClientName = "github-workflow-dashboard"

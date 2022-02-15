@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NewestUser/github-workflow-dashboard/formatter"
-	"github.com/NewestUser/github-workflow-dashboard/github"
 	"github.com/gorilla/mux"
+	"github.com/newestuser/github-workflow-dashboard/formatter"
+	"github.com/newestuser/github-workflow-dashboard/github"
 )
 
 type Options struct {

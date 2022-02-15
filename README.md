@@ -1,5 +1,7 @@
 ## CLI capable of retrieving github action workflows stats
 
+![dashboard-image](./assets/github-workflow-dashboard.png)
+
 ### Example usage
 
 - Dashboard mod
@@ -11,6 +13,10 @@ github-workflow-dashboard -server-mod -owner Azure -repo k8s-deploy  "Create rel
 ```shell
 github-workflow-dashboard -owner Azure -repo k8s-deploy  "Create release PR" "Tag and create release draft"
 ```
+
+### Binaries
+Prebuild binaries can be found [here](./bin/).  
+In order to rebuild the project run `make go-build`
 
 ### Manual
 

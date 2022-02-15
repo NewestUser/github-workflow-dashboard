@@ -3,9 +3,8 @@ package formatter
 import (
 	"encoding/json"
 
-	"github.com/NewestUser/github-workflow-dashboard/github"
+	"github.com/newestuser/github-workflow-dashboard/github"
 )
-
 
 func ToJson(runs []*github.WorkflowRun) (string, error) {
 	bytes, err := json.Marshal(runs)

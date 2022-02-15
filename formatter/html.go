@@ -6,7 +6,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/NewestUser/github-workflow-dashboard/github"
+	"github.com/newestuser/github-workflow-dashboard/github"
 )
 
 var workflowRunHtmlTmpl = template.Must(template.New("workflowTable").Parse(workflowRunHtml))
@@ -42,7 +42,7 @@ func adaptMultipleWorkflowModels(runs []*github.WorkflowRun, titleUrlFunc func(*
 func adaptWorkflowModel(run *github.WorkflowRun, titleUrlFunc func(*github.WorkflowRun) string) *workflowRunModel {
 	return &workflowRunModel{
 		WorkflowName:     run.WorkflowName,
-		WorkflowURL:	  titleUrlFunc(run),
+		WorkflowURL:      titleUrlFunc(run),
 		WorkflowID:       run.WorkflowID,
 		JobRunID:         run.JobRunID,
 		JobHTMLURL:       run.JobHTMLURL,
@@ -75,7 +75,7 @@ func truncateStr(value interface{}, size int) string {
 
 type workflowRunModel struct {
 	WorkflowName     string
-	WorkflowURL		 string
+	WorkflowURL      string
 	WorkflowID       int
 	JobRunID         int
 	JobHTMLURL       string
