@@ -69,7 +69,7 @@ make docker-run
 
 - Using Docker
 ```shell
-docer build -t github-workflow-dashboard .
+docker build -t github-workflow-dashboard .
 
 docker run -it -rm -e WORKFLOW_SERVER_MOD=true -e WORKFLOW_OWNER="Azure" -e WORKFLOW_REPO="k8s-deploy" -p 8080:8080 github-workflow-dashboard
 ```
