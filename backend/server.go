@@ -18,6 +18,7 @@ type Options struct {
 	Port         int
 	Filter       *github.WorkflowFilter
 	PollInterval time.Duration
+	LatestOnly   bool
 }
 
 func NewServer(client *github.WorkflowClient, opts *Options) *Server {
@@ -159,17 +160,39 @@ func (s *Server) pollGithubWorkflows() {
 }
 
 func (s *Server) fetchState(timestamp time.Time) (*workflowState, error) {
-	runs, err := s.client.FetchWorkflowRuns(context.Background(), s.opts.Filter)
-	if err != nil {
-		return nil, fmt.Errorf("%s failed polling workflow stats, workflows: %v err: %v", timestamp, s.opts.Filter.WorkflowNames, err)
+	var runs []*github.WorkflowRun
+	var err error
+
+	if s.opts.LatestOnly {
+		runs, err = s.client.FetchLatestWorkflowRuns(context.Background(), s.opts.Filter)
+	} else {
+		runs, err = s.client.FetchWorkflowRuns(context.Background(), s.opts.Filter)
 	}
 
-	log.Printf("%s successfully retrieved workflow runs, worfklows: %v\n", timestamp, s.opts.Filter.WorkflowNames)
+	if err != nil {
+		return nil, fmt.Errorf("%s failed polling workflow stats, workflows: %v err: %v", timestamp, filterNames(runs), err)
+	}
+
+	log.Printf("%s successfully retrieved workflow runs, worfklows: %v\n", timestamp, filterNames(runs))
 
 	return &workflowState{
 		runs: runs,
 		uts:  timestamp,
 	}, nil
+}
+
+func filterNames(runs []*github.WorkflowRun) []string {
+	namesMap := map[string]bool{}
+	for _, run := range runs {
+		namesMap[run.WorkflowName] = true
+	}
+
+	names := make([]string, 0)
+	for k, _ := range namesMap {
+		names = append(names, k)
+	}
+
+	return names
 }
 
 func (s *Server) setState(state workflowState) {

@@ -26,6 +26,8 @@ Usage: github-workflow-dashboard [global flags] '<workflow>'
 global flags:
   -format string
     	The format in which to print the workflow stats (ascii, json) (default "ascii")
+  -latest-only
+    	Fetch only the latest run of the github workflow
   -owner string
     	Github repository owner
   -repo string
@@ -52,6 +54,7 @@ Command line args take precedence over env variables. If a cmd arg is not passed
 WORKFLOW_TOKEN
 WORKFLOW_OWNER
 WORKFLOW_REPO
+WORKFLOW_LATEST_ONLY
 WORKFLOW_FORMAT
 WORKFLOW_SERVER_MOD
 WORKFLOW_SERVER_PORT 

@@ -17,13 +17,14 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const Version = "0.1"
+const Version = "0.2"
 const ClientName = "github-workflow-dashboard"
 
 type options struct {
 	token              string
 	owner              string
 	repo               string
+	latestOnly         bool
 	formatMod          string
 	serverMod          bool
 	serverPort         int
@@ -59,6 +60,7 @@ func main() {
 	fs.StringVar(&opts.token, "token", getStrEnv("WORKFLOW_TOKEN"), "Github API token, see: https://docs.github.coim/en/articles/creating-an-access-token-for-command-line-use")
 	fs.StringVar(&opts.owner, "owner", getStrEnv("WORKFLOW_OWNER"), "Github repository owner")
 	fs.StringVar(&opts.repo, "repo", getStrEnv("WORKFLOW_REPO"), "Github repository")
+	fs.BoolVar(&opts.latestOnly, "latest-only", getBoolEnvOr("WORKFLOW_LATEST_ONLY", false), "Fetch only the latest run of the github workflow")
 	fs.StringVar(&opts.formatMod, "format", getStrEnvOr("WORKFLOW_FORMAT", "ascii"), "The format in which to print the workflow stats (ascii, json)")
 	fs.BoolVar(&opts.serverMod, "server-mod", getBoolEnvOr("WORKFLOW_SERVER_MOD", false), "Start a web server that periodically pulls github workflow stats")
 	fs.IntVar(&opts.serverPort, "server-port", getIntEnvOr("WORKFLOW_SERVER_PORT", 8080), "The port on which to start the web server if running in server-mod")
@@ -78,7 +80,7 @@ func main() {
 
 	cliArgs := fs.Args()
 	if len(cliArgs) == 0 {
-		cliArgs = strings.Split(os.Getenv("WORKFLOW_CSV"), ",")
+		cliArgs = loadEnvVarWorkflows()
 	}
 	opts.workflows = cliArgs
 
@@ -111,6 +113,7 @@ func executeAsServer(opts *options) error {
 		Port:         opts.serverPort,
 		Filter:       filter,
 		PollInterval: time.Duration(opts.serverPollInterval) * time.Minute,
+		LatestOnly:   opts.latestOnly,
 	}
 
 	client := newGithubClient(context.Background(), opts)
@@ -124,7 +127,15 @@ func executeAsCmd(opts *options) error {
 	client := newGithubClient(ctx, opts)
 	filter := newWorkflowFilter(opts)
 
-	workflowRuns, err := client.FetchLatestWorkflowRuns(ctx, filter)
+	var workflowRuns []*github.WorkflowRun
+	var err error
+
+	if opts.latestOnly {
+		workflowRuns, err = client.FetchLatestWorkflowRuns(ctx, filter)
+	} else {
+		workflowRuns, err = client.FetchWorkflowRuns(ctx, filter)
+	}
+
 	if err != nil {
 		return err
 	}
@@ -166,6 +177,14 @@ func newWorkflowFilter(opts *options) *github.WorkflowFilter {
 	}
 }
 
+func loadEnvVarWorkflows() []string {
+	workflowCsv := os.Getenv("WORKFLOW_CSV")
+	if len(workflowCsv) == 0 {
+		return []string{}
+	}
+	return strings.Split(os.Getenv("WORKFLOW_CSV"), ",")
+}
+
 func getStrEnv(name string) string {
 	return os.Getenv(name)
 }
@@ -177,17 +196,6 @@ func getStrEnvOr(name string, other string) string {
 	}
 
 	return value
-}
-
-func getIntEnv(name string) int {
-	value := os.Getenv(name)
-
-	intValue, err := strconv.Atoi(value)
-	if err != nil {
-		log.Fatalf("environment variable %s=%s can't be parsed to int", name, value)
-	}
-
-	return intValue
 }
 
 func getIntEnvOr(name string, other int) int {
@@ -203,17 +211,6 @@ func getIntEnvOr(name string, other int) int {
 	}
 
 	return intValue
-}
-
-func getBoolEnv(name string) bool {
-	value := os.Getenv(name)
-
-	boolValue, err := strconv.ParseBool(value)
-	if err != nil {
-		log.Fatalf("environment variable %s=%s can't be parsed to int", name, value)
-	}
-
-	return boolValue
 }
 
 func getBoolEnvOr(name string, other bool) bool {

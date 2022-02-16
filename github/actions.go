@@ -14,6 +14,8 @@ import (
 	g "github.com/google/go-github/v42/github"
 )
 
+const maxPageSize = 100
+
 type WorkflowRun struct {
 	WorkflowOwner    string    `json:"workflowOwner"`
 	WorkflowRepo     string    `json:"workflowRepo"`
@@ -166,22 +168,22 @@ func queryAndAdaptWorkflowRuns(client *g.Client, ctx context.Context, filter *Wo
 }
 
 func queryWorkflowRuns(client *g.Client, ctx context.Context, filter *WorkflowFilter) ([]*g.WorkflowRun, error) {
-	if len(filter.WorkflowNames) == 0 {
-
-		workflowRuns, _, err := client.Actions.ListRepositoryWorkflowRuns(ctx, filter.Owner, filter.Repo, &g.ListWorkflowRunsOptions{})
-		if err != nil {
-			return nil, err
-		}
-		return workflowRuns.WorkflowRuns, nil
-	}
-
 	existingWorkflows, err := listAllWorkflows(client, ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 
+	currentFilter := *filter
+	if len(filter.WorkflowNames) == 0 {
+		allWorkflows := make([]string, len(existingWorkflows))
+		for i, workflow := range existingWorkflows {
+			allWorkflows[i] = workflow.GetName()
+		}
+		currentFilter.WorkflowNames = allWorkflows
+	}
+
 	workflowIds := map[string]int{}
-	for _, workflowName := range filter.WorkflowNames {
+	for _, workflowName := range currentFilter.WorkflowNames {
 		id := resolveWorkflowId(workflowName, existingWorkflows)
 		if id == -1 {
 			return nil, fmt.Errorf("can't resolve ID of workflow with name '%s'", workflowName)
@@ -192,7 +194,8 @@ func queryWorkflowRuns(client *g.Client, ctx context.Context, filter *WorkflowFi
 
 	filteredRuns := make([]*g.WorkflowRun, 0)
 	for name, id := range workflowIds {
-		workflowRuns, _, err := client.Actions.ListWorkflowRunsByID(ctx, filter.Owner, filter.Repo, int64(id), nil)
+		pageOptions := &g.ListWorkflowRunsOptions{ListOptions: *newPageOption(0, maxPageSize)}
+		workflowRuns, _, err := client.Actions.ListWorkflowRunsByID(ctx, filter.Owner, filter.Repo, int64(id), pageOptions)
 		if err != nil {
 			return nil, fmt.Errorf("couldn't retrieve workflow runs for workflow '%s', err: %s", name, err)
 		}
@@ -206,9 +209,9 @@ func queryWorkflowRuns(client *g.Client, ctx context.Context, filter *WorkflowFi
 func listAllWorkflows(client *g.Client, ctx context.Context, filter *WorkflowFilter) ([]*g.Workflow, error) {
 	allResults := make([]*g.Workflow, 0)
 
-	var pageSize int = 100
+	var pageSize = maxPageSize
 	var workflowChunk *g.Workflows = nil
-	workflowChunk, _, err := client.Actions.ListWorkflows(ctx, filter.Owner, filter.Repo, &g.ListOptions{PerPage: pageSize})
+	workflowChunk, _, err := client.Actions.ListWorkflows(ctx, filter.Owner, filter.Repo, newPageOption(0, pageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +221,7 @@ func listAllWorkflows(client *g.Client, ctx context.Context, filter *WorkflowFil
 	for workflowChunk.GetTotalCount() > len(allResults) {
 		page := int(len(allResults)/pageSize) + 1
 
-		workflowChunk, _, err = client.Actions.ListWorkflows(ctx, filter.Owner, filter.Repo, &g.ListOptions{Page: page, PerPage: pageSize})
+		workflowChunk, _, err = client.Actions.ListWorkflows(ctx, filter.Owner, filter.Repo, newPageOption(page, pageSize))
 		if err != nil {
 			return nil, err
 		}
@@ -226,6 +229,10 @@ func listAllWorkflows(client *g.Client, ctx context.Context, filter *WorkflowFil
 	}
 
 	return allResults, nil
+}
+
+func newPageOption(page int, perPage int) *g.ListOptions {
+	return &g.ListOptions{Page: page, PerPage: perPage}
 }
 
 func resolveWorkflowId(name string, workflows []*g.Workflow) int {
