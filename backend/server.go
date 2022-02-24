@@ -15,10 +15,11 @@ import (
 )
 
 type Options struct {
-	Port         int
-	Filter       *github.WorkflowFilter
-	PollInterval time.Duration
-	LatestOnly   bool
+	Port                int
+	Filter              *github.WorkflowFilter
+	PollInterval        time.Duration
+	LatestOnly          bool
+	ParseWorkflowParams bool
 }
 
 func NewServer(client *github.WorkflowClient, opts *Options) *Server {
@@ -152,7 +153,6 @@ func (s *Server) pollGithubWorkflows() {
 	for tick := range time.Tick(s.opts.PollInterval) {
 		state, err := s.fetchState(tick)
 		if err != nil {
-			log.Println(err)
 			continue
 		}
 		s.setState(*state)
@@ -162,15 +162,22 @@ func (s *Server) pollGithubWorkflows() {
 func (s *Server) fetchState(timestamp time.Time) (*workflowState, error) {
 	var runs []*github.WorkflowRun
 	var err error
+	ctx := context.Background()
 
 	if s.opts.LatestOnly {
-		runs, err = s.client.FetchLatestWorkflowRuns(context.Background(), s.opts.Filter)
+		runs, err = s.client.FetchLatestWorkflowRuns(ctx, s.opts.Filter)
 	} else {
-		runs, err = s.client.FetchWorkflowRuns(context.Background(), s.opts.Filter)
+		runs, err = s.client.FetchWorkflowRuns(ctx, s.opts.Filter)
+	}
+
+	if err == nil && s.opts.ParseWorkflowParams {
+		err = s.client.EnrichWorkflowRunsWithParams(ctx, s.opts.Filter, runs)
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("%s failed polling workflow stats, workflows: %v err: %v", timestamp, filterNames(runs), err)
+		err = fmt.Errorf("%s failed fetching workflow stats, workflows: %v err: %v", timestamp, filterNames(runs), err)
+		log.Println(err.Error())
+		return nil, err 
 	}
 
 	log.Printf("%s successfully retrieved workflow runs, worfklows: %v\n", timestamp, filterNames(runs))
@@ -203,6 +210,7 @@ func (s *Server) setState(state workflowState) {
 
 func (s *Server) getState() (*workflowState, error) {
 	s.stateMutex.Lock()
+	defer s.stateMutex.Unlock()
 
 	if s.state == nil {
 		state, err := s.fetchState(time.Now())
@@ -213,7 +221,6 @@ func (s *Server) getState() (*workflowState, error) {
 		}
 	}
 
-	defer s.stateMutex.Unlock()
 	return s.state, nil
 }
 

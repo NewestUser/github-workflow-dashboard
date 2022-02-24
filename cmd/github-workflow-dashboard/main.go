@@ -17,7 +17,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const Version = "0.2"
+const Version = "0.3"
 const ClientName = "github-workflow-dashboard"
 
 type options struct {
@@ -25,6 +25,7 @@ type options struct {
 	owner              string
 	repo               string
 	latestOnly         bool
+	parseParams        bool
 	formatMod          string
 	serverMod          bool
 	serverPort         int
@@ -61,6 +62,7 @@ func main() {
 	fs.StringVar(&opts.owner, "owner", getStrEnv("WORKFLOW_OWNER"), "Github repository owner")
 	fs.StringVar(&opts.repo, "repo", getStrEnv("WORKFLOW_REPO"), "Github repository")
 	fs.BoolVar(&opts.latestOnly, "latest-only", getBoolEnvOr("WORKFLOW_LATEST_ONLY", false), "Fetch only the latest run of the github workflow")
+	fs.BoolVar(&opts.parseParams, "parse-params", getBoolEnvOr("WORKFLOW_PARSE_PARAMS", true), "Parse workflow run params from log files")
 	fs.StringVar(&opts.formatMod, "format", getStrEnvOr("WORKFLOW_FORMAT", "ascii"), "The format in which to print the workflow stats (ascii, json)")
 	fs.BoolVar(&opts.serverMod, "server-mod", getBoolEnvOr("WORKFLOW_SERVER_MOD", false), "Start a web server that periodically pulls github workflow stats")
 	fs.IntVar(&opts.serverPort, "server-port", getIntEnvOr("WORKFLOW_SERVER_PORT", 8080), "The port on which to start the web server if running in server-mod")
@@ -110,10 +112,11 @@ func executeAsServer(opts *options) error {
 	filter := newWorkflowFilter(opts)
 
 	srvOpts := &backend.Options{
-		Port:         opts.serverPort,
-		Filter:       filter,
-		PollInterval: time.Duration(opts.serverPollInterval) * time.Minute,
-		LatestOnly:   opts.latestOnly,
+		Port:                opts.serverPort,
+		Filter:              filter,
+		PollInterval:        time.Duration(opts.serverPollInterval) * time.Minute,
+		LatestOnly:          opts.latestOnly,
+		ParseWorkflowParams: opts.parseParams,
 	}
 
 	client := newGithubClient(context.Background(), opts)
@@ -134,6 +137,10 @@ func executeAsCmd(opts *options) error {
 		workflowRuns, err = client.FetchLatestWorkflowRuns(ctx, filter)
 	} else {
 		workflowRuns, err = client.FetchWorkflowRuns(ctx, filter)
+	}
+
+	if err == nil && opts.parseParams {
+		err = client.EnrichWorkflowRunsWithParams(ctx, filter, workflowRuns)
 	}
 
 	if err != nil {
