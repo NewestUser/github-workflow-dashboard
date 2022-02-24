@@ -30,6 +30,8 @@ global flags:
     	Fetch only the latest run of the github workflow
   -owner string
     	Github repository owner
+  -parse-params
+    	Parse workflow run params from log files (default true)
   -repo string
     	Github repository
   -server-mod
@@ -55,6 +57,7 @@ WORKFLOW_TOKEN
 WORKFLOW_OWNER
 WORKFLOW_REPO
 WORKFLOW_LATEST_ONLY
+WORKFLOW_PARSE_PARAMS
 WORKFLOW_FORMAT
 WORKFLOW_SERVER_MOD
 WORKFLOW_SERVER_PORT 

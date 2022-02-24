@@ -5,6 +5,7 @@ package github
 //////////////////////////////////////////////////////////////////////////////////
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
@@ -17,26 +18,34 @@ import (
 const maxPageSize = 100
 
 type WorkflowRun struct {
-	WorkflowOwner    string    `json:"workflowOwner"`
-	WorkflowRepo     string    `json:"workflowRepo"`
-	WorkflowName     string    `json:"workflowName"`
-	WorkflowID       int       `json:"workflowId"`
-	JobRunID         int       `json:"jobRunId"`
-	JobHTMLURL       string    `json:"jobHtmlUrl"`
-	JobLogsURL       string    `json:"jobLogsUrl"`
-	JobRunNumber     int       `json:"jobRunNumber"`
-	JobConclusion    string    `json:"jobConclusion"`
-	JobStatus        string    `json:"jobStatus"`
-	JobEvent         string    `json:"jobEvent"`
-	JobRunTime       time.Time `json:"jobRunTime"`
-	JobBranch        string    `json:"jobBranch"`
-	JobCommitSha     string    `json:"jobCommitSha"`
-	JobCommitAuthor  string    `json:"jobCommitAuthor"`
-	JobCommitMessage string    `json:"jobCommitMessage"`
-	JobCommitTime    time.Time `json:"jobCommitTitle"`
+	WorkflowOwner    string             `json:"workflowOwner"`
+	WorkflowRepo     string             `json:"workflowRepo"`
+	WorkflowName     string             `json:"workflowName"`
+	WorkflowID       int                `json:"workflowId"`
+	JobRunID         int                `json:"jobRunId"`
+	JobHTMLURL       string             `json:"jobHtmlUrl"`
+	JobLogsURL       string             `json:"jobLogsUrl"`
+	JobRunNumber     int                `json:"jobRunNumber"`
+	JobConclusion    string             `json:"jobConclusion"`
+	JobStatus        string             `json:"jobStatus"`
+	JobEvent         string             `json:"jobEvent"`
+	JobRunTime       time.Time          `json:"jobRunTime"`
+	JobBranch        string             `json:"jobBranch"`
+	JobCommitSha     string             `json:"jobCommitSha"`
+	JobCommitAuthor  string             `json:"jobCommitAuthor"`
+	JobCommitMessage string             `json:"jobCommitMessage"`
+	JobCommitTime    time.Time          `json:"jobCommitTitle"`
+	WorkflowParams   *WorkflowRunParams `json:"worfklowParams"`
 }
 
-type WorkflowRunInput map[string]string
+type WorkflowRunParams struct {
+	WorkflowOwner string         `json:"workflowOwner"`
+	WorkflowRepo  string         `json:"workflowRepo"`
+	RunId         int            `json:"jobRunId"`
+	Params        []JobRunParams `json:"jobParams"`
+}
+
+type JobRunParams map[string]string
 
 // Use this as a filter to narrow down which workflow runs to be queried
 type WorkflowFilter struct {
@@ -91,26 +100,52 @@ func (c *WorkflowClient) FetchLatestWorkflowRuns(ctx context.Context, filter *Wo
 	return sortWorkflowRuns(result), nil
 }
 
-func (c *WorkflowClient) FetchWorkflowRunInput(ctx context.Context, filter *WorkflowFilter, runId int) (*WorkflowRunInput, error) {
-	// TODO fetch logs and pars them for `env` variables
+func (c *WorkflowClient) EnrichWorkflowRunsWithParams(ctx context.Context, filter *WorkflowFilter, runs []*WorkflowRun) error {
+	for _, run := range runs {
+		params, err := c.FetchWorkflowRunParams(ctx, filter, run.JobRunID)
+		if err != nil {
+			return err
+		}
+		run.WorkflowParams = params
+	}
 
-	// url, resp, err := c.client.Actions.GetWorkflowRunLogs(ctx, filter.Owner, filter.Repo, int64(runId), true)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	return nil
+}
 
-	// _ = url
-	// _ = resp
+func (c *WorkflowClient) FetchWorkflowRunParams(ctx context.Context, filter *WorkflowFilter, runId int) (*WorkflowRunParams, error) {
+	// c.client.Actions.GetWorkflowJobLogs(ctx, filter.Owner, filter.Repo, int64(runId), true)
+	url, _, err := c.client.Actions.GetWorkflowRunLogs(ctx, filter.Owner, filter.Repo, int64(runId), true)
+	if err != nil {
+		return nil, err
+	}
 
-	// bytes, err := ioutil.ReadAll(resp.Body)
+	req, err := http.NewRequest("GET", url.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
-	// if err != nil {
-	// 	return nil, err
-	// }
+	respBody := new(bytes.Buffer)
 
-	// fmt.Println(url)
-	// fmt.Println(string(bytes))
-	return nil, nil
+	resp, err := c.client.Do(ctx, req, respBody)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%s %s - response: %s %s", req.Method, req.URL, resp.Status, respBody.String())
+	}
+
+	workflowLogs, err := readZip(*respBody)
+	if err != nil {
+		return nil, err
+	}
+
+	params, err := parseWorkflowParams(workflowLogs)
+	if err != nil {
+		return nil, err
+	}
+
+	return &WorkflowRunParams{WorkflowOwner: filter.Owner, WorkflowRepo: filter.Repo, RunId: runId, Params: params}, nil
 }
 
 func queryAndAdaptWorkflowRuns(client *g.Client, ctx context.Context, filter *WorkflowFilter) ([]*WorkflowRun, error) {
