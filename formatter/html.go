@@ -2,6 +2,7 @@ package formatter
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"text/template"
 	"time"
@@ -18,7 +19,11 @@ func ToHTML(runs []*github.WorkflowRun) (string, error) {
 func ToHTMLWithCustomLink(runs []*github.WorkflowRun, titleUrlFunc func(*github.WorkflowRun) string) (string, error) {
 	tableRows := &strings.Builder{}
 
-	err := workflowRunHtmlTmpl.Execute(tableRows, &multipleWorkflowRunsDataModel{Workflows: adaptMultipleWorkflowModels(runs, titleUrlFunc)})
+	dataModel := &multipleWorkflowRunsDataModel{
+		Workflows: adaptMultipleWorkflowModels(runs, titleUrlFunc),
+		DisplayParams: containsParams(runs),
+	}
+	err := workflowRunHtmlTmpl.Execute(tableRows, dataModel)
 
 	if err != nil {
 		return "", err
@@ -29,6 +34,7 @@ func ToHTMLWithCustomLink(runs []*github.WorkflowRun, titleUrlFunc func(*github.
 
 type multipleWorkflowRunsDataModel struct {
 	Workflows []*workflowRunModel
+	DisplayParams bool
 }
 
 func adaptMultipleWorkflowModels(runs []*github.WorkflowRun, titleUrlFunc func(*github.WorkflowRun) string) []*workflowRunModel {
@@ -57,6 +63,7 @@ func adaptWorkflowModel(run *github.WorkflowRun, titleUrlFunc func(*github.Workf
 		JobCommitAuthor:  run.JobCommitAuthor,
 		JobCommitMessage: run.JobCommitMessage,
 		JobCommitTime:    timeSince(run.JobCommitTime),
+		JobRunParams:     adaptParams(run.WorkflowParams),
 	}
 }
 
@@ -71,6 +78,31 @@ func truncateStr(value interface{}, size int) string {
 	}
 
 	return v[0:size]
+}
+
+func adaptParams(p *github.WorkflowRunParams) []string {
+	if p == nil {
+		return []string{}
+	}
+
+	setOfParams := map[string]string{}
+	for _, jobParam := range p.Params {
+		for k, v := range jobParam {
+			setOfParams[k] = v
+		}
+	}
+
+	params := make([]string, 0)
+
+	for k, v := range setOfParams {
+		params = append(params, fmt.Sprintf("%s: %s", k, v))
+	}
+
+	sort.Slice(params, func(i, j int) bool {
+		return params[i] > params[j]
+	})
+
+	return params
 }
 
 type workflowRunModel struct {
@@ -90,6 +122,7 @@ type workflowRunModel struct {
 	JobCommitAuthor  string
 	JobCommitMessage string
 	JobCommitTime    string
+	JobRunParams     []string
 }
 
 const workflowRunHtml = `
@@ -100,11 +133,14 @@ const workflowRunHtml = `
 			<th>#</th>
 			<th>Status</th>
 			<th>Branch</th>
-			<th>Author</th>
+			<th>Commiter</th>
 			<th>Commit Msg</th>
 			<th>Commit</th>
 			<th>Commit Time</th>
 			<th>Run Time</th>
+			{{if .DisplayParams}}
+				<th>Params</th>
+			{{end}}
 		</tr>
 	</thead>
 	<tbody>
@@ -123,6 +159,13 @@ const workflowRunHtml = `
 				<td>{{.JobCommitSha}}</td>
 				<td>{{.JobCommitTime}}</td>
 				<td>{{.JobRunTime}}</td>
+				{{if $.DisplayParams}}
+					<td>
+						{{range .JobRunParams}}
+							{{.}}<br/>
+						{{end}}
+					</td>
+				{{end}}
 			</tr>
 		{{end}}
 	</tbody>
