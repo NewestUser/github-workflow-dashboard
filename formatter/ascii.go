@@ -51,7 +51,11 @@ func mapAsciiRow(run *github.WorkflowRun, includeParams bool) []string {
 		run.JobRunTime.UTC().String()}
 
 	if includeParams {
-		asciRow = append(asciRow, mapAsciiParams(run.WorkflowParams.Params))
+		if run.WorkflowParams != nil {
+			asciRow = append(asciRow, mapAsciiParams(run.WorkflowParams.Params))
+		} else {
+			asciRow = append(asciRow, "")
+		}
 	}
 
 	return asciRow

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	g "github.com/google/go-github/v42/github"
+	log "github.com/sirupsen/logrus"
 )
 
 const maxPageSize = 100
@@ -104,7 +105,7 @@ func (c *WorkflowClient) EnrichWorkflowRunsWithParams(ctx context.Context, filte
 	for _, run := range runs {
 		params, err := c.FetchWorkflowRunParams(ctx, filter, run.JobRunID)
 		if err != nil {
-			return err
+			log.Warn(fmt.Sprintf("Failed fetching workflow params for workflow: %v runId: %d, it will be ommitedd, err: %v\n", run.WorkflowName, run.JobRunID, err))
 		}
 		run.WorkflowParams = params
 	}
