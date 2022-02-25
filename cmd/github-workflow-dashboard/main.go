@@ -17,7 +17,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const Version = "v0.4"
+const Version = "v0.5"
 const ClientName = "github-workflow-dashboard"
 
 type options struct {
@@ -62,7 +62,7 @@ func main() {
 	fs.StringVar(&opts.owner, "owner", getStrEnv("WORKFLOW_OWNER"), "Github repository owner")
 	fs.StringVar(&opts.repo, "repo", getStrEnv("WORKFLOW_REPO"), "Github repository")
 	fs.BoolVar(&opts.latestOnly, "latest-only", getBoolEnvOr("WORKFLOW_LATEST_ONLY", false), "Fetch only the latest run of the github workflow")
-	fs.BoolVar(&opts.parseParams, "parse-params", getBoolEnvOr("WORKFLOW_PARSE_PARAMS", true), "Parse workflow run params from log files")
+	fs.BoolVar(&opts.parseParams, "parse-params", getBoolEnvOr("WORKFLOW_PARSE_PARAMS", false), "Parse workflow run params from log files")
 	fs.StringVar(&opts.formatMod, "format", getStrEnvOr("WORKFLOW_FORMAT", "ascii"), "The format in which to print the workflow stats (ascii, json)")
 	fs.BoolVar(&opts.serverMod, "server-mod", getBoolEnvOr("WORKFLOW_SERVER_MOD", false), "Start a web server that periodically pulls github workflow stats")
 	fs.IntVar(&opts.serverPort, "server-port", getIntEnvOr("WORKFLOW_SERVER_PORT", 8080), "The port on which to start the web server if running in server-mod")

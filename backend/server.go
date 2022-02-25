@@ -13,7 +13,6 @@ import (
 	"github.com/newestuser/github-workflow-dashboard/github"
 
 	log "github.com/sirupsen/logrus"
-
 )
 
 type Options struct {
@@ -164,12 +163,13 @@ func (s *Server) pollGithubWorkflows() {
 }
 
 func (s *Server) fetchState(timestamp time.Time) (*workflowState, error) {
-	ts := time.Now()
+	syncTs := timestamp.UTC().Round(time.Second)
+	execTs := time.Now()
 
 	var runs []*github.WorkflowRun
 	var err error
 	ctx := context.Background()
-	
+
 	if s.opts.LatestOnly {
 		runs, err = s.client.FetchLatestWorkflowRuns(ctx, s.opts.Filter)
 	} else {
@@ -177,23 +177,23 @@ func (s *Server) fetchState(timestamp time.Time) (*workflowState, error) {
 	}
 
 	if err != nil {
-		err = fmt.Errorf("synctime: [%s] failed fetching workflow stats, workflows: %v err: %v", timestamp, filterNames(runs), err)
+		err = fmt.Errorf("synctime: [%s] failed fetching workflow stats, workflows: %v err: %v", syncTs, filterNames(runs), err)
 		log.Error(err.Error())
-		return nil, err 
+		return nil, err
 	}
 
 	if s.opts.ParseWorkflowParams {
 		for _, run := range runs {
 			params, err := s.client.FetchWorkflowRunParams(ctx, s.opts.Filter, run.JobRunID)
 			if err != nil {
-				log.Warn(fmt.Sprintf("synctime: [%s] failed fetching workflow params for workflow: %v runId: %d, it will be ommitedd, err: %v\n", timestamp, run.WorkflowName, run.JobRunID, err))
+				log.Warn("synctime: [", syncTs, "] failed fetching workflow params for workflow: ", run.WorkflowName, " runId: ", run.JobRunID, ", it will be omitted, err: ", err)
 				continue
 			}
 			run.WorkflowParams = params
 		}
 	}
 
-	log.Info(fmt.Sprintf("synctime: [%s] successfully retrieved workflow runs in %s, worfklows: %v\n", timestamp, time.Since(ts), filterNames(runs)))
+	log.Info("synctime: [", syncTs, "] successfully retrieved workflow runs in ", time.Since(execTs).Round(time.Second), ", worfklows: ", filterNames(runs))
 
 	return &workflowState{
 		runs: runs,

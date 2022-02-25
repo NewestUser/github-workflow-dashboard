@@ -31,7 +31,7 @@ global flags:
   -owner string
     	Github repository owner
   -parse-params
-    	Parse workflow run params from log files (default true)
+    	Parse workflow run params from log files
   -repo string
     	Github repository
   -server-mod
