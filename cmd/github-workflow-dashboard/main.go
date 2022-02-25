@@ -17,7 +17,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const Version = "0.3"
+const Version = "v0.4"
 const ClientName = "github-workflow-dashboard"
 
 type options struct {

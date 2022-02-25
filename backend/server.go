@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -12,6 +11,9 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/newestuser/github-workflow-dashboard/formatter"
 	"github.com/newestuser/github-workflow-dashboard/github"
+
+	log "github.com/sirupsen/logrus"
+
 )
 
 type Options struct {
@@ -46,7 +48,7 @@ type workflowState struct {
 var dashboardTemplate = template.Must(template.New("dashboard").Parse(dashboardHTMLTemplate))
 
 func (s *Server) Start() error {
-	log.Printf("starting web server on port %d", s.opts.Port)
+	log.Info("starting web server on port ", s.opts.Port)
 	go s.pollGithubWorkflows()
 
 	r := mux.NewRouter()
@@ -121,6 +123,7 @@ func serveWorkflowRuns(pageMetaInfoFecher func(*http.Request) (string, time.Time
 	return func(w http.ResponseWriter, r *http.Request) {
 		runs, err := workflowFetcher(r)
 		if err != nil {
+			log.Error(err.Error())
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -129,6 +132,7 @@ func serveWorkflowRuns(pageMetaInfoFecher func(*http.Request) (string, time.Time
 			return fmt.Sprintf("/%s/%s/%s", run.WorkflowOwner, run.WorkflowRepo, run.WorkflowName)
 		})
 		if err != nil {
+			log.Error(err.Error())
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -142,7 +146,7 @@ func serveWorkflowRuns(pageMetaInfoFecher func(*http.Request) (string, time.Time
 		err = dashboardTemplate.Execute(w, htmlPage)
 
 		if err != nil {
-			log.Println(err)
+			log.Error(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -160,27 +164,36 @@ func (s *Server) pollGithubWorkflows() {
 }
 
 func (s *Server) fetchState(timestamp time.Time) (*workflowState, error) {
+	ts := time.Now()
+
 	var runs []*github.WorkflowRun
 	var err error
 	ctx := context.Background()
-
+	
 	if s.opts.LatestOnly {
 		runs, err = s.client.FetchLatestWorkflowRuns(ctx, s.opts.Filter)
 	} else {
 		runs, err = s.client.FetchWorkflowRuns(ctx, s.opts.Filter)
 	}
 
-	if err == nil && s.opts.ParseWorkflowParams {
-		err = s.client.EnrichWorkflowRunsWithParams(ctx, s.opts.Filter, runs)
-	}
-
 	if err != nil {
-		err = fmt.Errorf("%s failed fetching workflow stats, workflows: %v err: %v", timestamp, filterNames(runs), err)
-		log.Println(err.Error())
+		err = fmt.Errorf("synctime: [%s] failed fetching workflow stats, workflows: %v err: %v", timestamp, filterNames(runs), err)
+		log.Error(err.Error())
 		return nil, err 
 	}
 
-	log.Printf("%s successfully retrieved workflow runs, worfklows: %v\n", timestamp, filterNames(runs))
+	if s.opts.ParseWorkflowParams {
+		for _, run := range runs {
+			params, err := s.client.FetchWorkflowRunParams(ctx, s.opts.Filter, run.JobRunID)
+			if err != nil {
+				log.Warn(fmt.Sprintf("synctime: [%s] failed fetching workflow params for workflow: %v runId: %d, it will be ommitedd, err: %v\n", timestamp, run.WorkflowName, run.JobRunID, err))
+				continue
+			}
+			run.WorkflowParams = params
+		}
+	}
+
+	log.Info(fmt.Sprintf("synctime: [%s] successfully retrieved workflow runs in %s, worfklows: %v\n", timestamp, time.Since(ts), filterNames(runs)))
 
 	return &workflowState{
 		runs: runs,
