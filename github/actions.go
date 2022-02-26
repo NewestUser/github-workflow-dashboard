@@ -105,7 +105,7 @@ func (c *WorkflowClient) EnrichWorkflowRunsWithParams(ctx context.Context, filte
 	for _, run := range runs {
 		params, err := c.FetchWorkflowRunParams(ctx, filter, run.JobRunID)
 		if err != nil {
-			log.Warn(fmt.Sprintf("Failed fetching workflow params for workflow: %v runId: %d, it will be ommitedd, err: %v\n", run.WorkflowName, run.JobRunID, err))
+			log.Warn(fmt.Sprintf("Failed fetching workflow params for workflow: %v runId: %d, it will be ommitedd, err: %v", run.WorkflowName, run.JobRunID, err))
 		}
 		run.WorkflowParams = params
 	}
