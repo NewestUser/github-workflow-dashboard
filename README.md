@@ -41,7 +41,7 @@ global flags:
   -server-port int
     	The port on which to start the web server if running in server-mod (default 8080)
   -token string
-    	Github API token, see: https://docs.github.coim/en/articles/creating-an-access-token-for-command-line-use
+    	Github API token, see: https://docs.github.com/en/articles/creating-an-access-token-for-command-line-use
   -version
     	Print version and exit
 
