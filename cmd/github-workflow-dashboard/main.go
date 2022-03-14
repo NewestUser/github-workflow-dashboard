@@ -17,7 +17,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const Version = "v0.6"
+const Version = "v0.7"
 const ClientName = "github-workflow-dashboard"
 
 type options struct {
@@ -58,7 +58,7 @@ func main() {
 		workflows: []string{},
 	}
 
-	fs.StringVar(&opts.token, "token", getStrEnv("WORKFLOW_TOKEN"), "Github API token, see: https://docs.github.coim/en/articles/creating-an-access-token-for-command-line-use")
+	fs.StringVar(&opts.token, "token", getStrEnv("WORKFLOW_TOKEN"), "Github API token, see: https://docs.github.com/en/articles/creating-an-access-token-for-command-line-use")
 	fs.StringVar(&opts.owner, "owner", getStrEnv("WORKFLOW_OWNER"), "Github repository owner")
 	fs.StringVar(&opts.repo, "repo", getStrEnv("WORKFLOW_REPO"), "Github repository")
 	fs.BoolVar(&opts.latestOnly, "latest-only", getBoolEnvOr("WORKFLOW_LATEST_ONLY", false), "Fetch only the latest run of the github workflow")
