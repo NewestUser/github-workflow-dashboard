@@ -17,7 +17,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const Version = "v0.7"
+const Version = "v0.8"
 const ClientName = "github-workflow-dashboard"
 
 type options struct {
@@ -25,6 +25,7 @@ type options struct {
 	owner              string
 	repo               string
 	latestOnly         bool
+	limit              int
 	parseParams        bool
 	formatMod          string
 	serverMod          bool
@@ -42,11 +43,27 @@ func (opts *options) isValid() bool {
 		return false
 	}
 
+	if opts.limit < 0 {
+		return false
+	}
+
+	if opts.limit > 1 && opts.latestOnly {
+		return false
+	}
+
 	if opts.formatMod != "ascii" && opts.formatMod != "json" {
 		return false
 	}
 
 	return true
+}
+
+func (opts *options) GetLimit() int {
+	if opts.latestOnly {
+		return 1
+	}
+
+	return opts.limit
 }
 
 func main() {
@@ -62,6 +79,7 @@ func main() {
 	fs.StringVar(&opts.owner, "owner", getStrEnv("WORKFLOW_OWNER"), "Github repository owner")
 	fs.StringVar(&opts.repo, "repo", getStrEnv("WORKFLOW_REPO"), "Github repository")
 	fs.BoolVar(&opts.latestOnly, "latest-only", getBoolEnvOr("WORKFLOW_LATEST_ONLY", false), "Fetch only the latest run of the github workflow")
+	fs.IntVar(&opts.limit, "limit", getIntEnvOr("WORKFLOW_LIMIT", 0), "Max number of runs to be fetched for each workflow (0 means fetch all)")
 	fs.BoolVar(&opts.parseParams, "parse-params", getBoolEnvOr("WORKFLOW_PARSE_PARAMS", false), "Parse workflow run params from log files")
 	fs.StringVar(&opts.formatMod, "format", getStrEnvOr("WORKFLOW_FORMAT", "ascii"), "The format in which to print the workflow stats (ascii, json)")
 	fs.BoolVar(&opts.serverMod, "server-mod", getBoolEnvOr("WORKFLOW_SERVER_MOD", false), "Start a web server that periodically pulls github workflow stats")
@@ -181,6 +199,7 @@ func newWorkflowFilter(opts *options) *github.WorkflowFilter {
 		Owner:         opts.owner,
 		Repo:          opts.repo,
 		WorkflowNames: opts.workflows,
+		Limit:         opts.GetLimit(),
 	}
 }
 

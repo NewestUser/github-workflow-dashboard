@@ -53,6 +53,7 @@ type WorkflowFilter struct {
 	Owner         string
 	Repo          string
 	WorkflowNames []string
+	Limit         int
 }
 
 type WorkflowClient struct {
@@ -114,7 +115,6 @@ func (c *WorkflowClient) EnrichWorkflowRunsWithParams(ctx context.Context, filte
 }
 
 func (c *WorkflowClient) FetchWorkflowRunParams(ctx context.Context, filter *WorkflowFilter, runId int) (*WorkflowRunParams, error) {
-	// c.client.Actions.GetWorkflowJobLogs(ctx, filter.Owner, filter.Repo, int64(runId), true)
 	url, _, err := c.client.Actions.GetWorkflowRunLogs(ctx, filter.Owner, filter.Repo, int64(runId), true)
 	if err != nil {
 		return nil, err
@@ -230,7 +230,8 @@ func queryWorkflowRuns(client *g.Client, ctx context.Context, filter *WorkflowFi
 
 	filteredRuns := make([]*g.WorkflowRun, 0)
 	for name, id := range workflowIds {
-		pageOptions := &g.ListWorkflowRunsOptions{ListOptions: *newPageOption(0, maxPageSize)}
+		currentPage := 0 // just the first page is retrieved, paging is not implemented for listing workflow runs
+		pageOptions := newWorkflowRunPageOption(currentPage, filter.Limit)
 		workflowRuns, _, err := client.Actions.ListWorkflowRunsByID(ctx, filter.Owner, filter.Repo, int64(id), pageOptions)
 		if err != nil {
 			return nil, fmt.Errorf("couldn't retrieve workflow runs for workflow '%s', err: %s", name, err)
@@ -265,6 +266,14 @@ func listAllWorkflows(client *g.Client, ctx context.Context, filter *WorkflowFil
 	}
 
 	return allResults, nil
+}
+
+func newWorkflowRunPageOption(page, limit int) *g.ListWorkflowRunsOptions {
+	pageSize := limit
+	if limit > maxPageSize || limit <= 0 {
+		pageSize = maxPageSize // paging is not implemented, so only the max allowed workflow runs are retrieved
+	}
+	return &g.ListWorkflowRunsOptions{ListOptions: *newPageOption(page, pageSize)}
 }
 
 func newPageOption(page int, perPage int) *g.ListOptions {

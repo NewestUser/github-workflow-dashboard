@@ -25,28 +25,30 @@ Usage: github-workflow-dashboard [global flags] '<workflow>'
 
 global flags:
   -format string
-    	The format in which to print the workflow stats (ascii, json) (default "ascii")
+        The format in which to print the workflow stats (ascii, json) (default "ascii")
   -latest-only
-    	Fetch only the latest run of the github workflow
+        Fetch only the latest run of the github workflow
+  -limit int
+        Max number of runs to be fetched for each workflow (0 means fetch all)
   -owner string
-    	Github repository owner
+        Github repository owner
   -parse-params
-    	Parse workflow run params from log files
+        Parse workflow run params from log files
   -repo string
-    	Github repository
+        Github repository
   -server-mod
-    	Start a web server that periodically pulls github workflow stats
+        Start a web server that periodically pulls github workflow stats
   -server-poll-interval int
-    	Interval in minutes used to poll github workflows (default 5)
+        Interval in minutes used to poll github workflows (default 5)
   -server-port int
-    	The port on which to start the web server if running in server-mod (default 8080)
+        The port on which to start the web server if running in server-mod (default 8080)
   -token string
-    	Github API token, see: https://docs.github.com/en/articles/creating-an-access-token-for-command-line-use
+        Github API token, see: https://docs.github.com/en/articles/creating-an-access-token-for-command-line-use
   -version
-    	Print version and exit
+        Print version and exit
 
 example:
-	github-workflow-dashboard -owner Azure -repo k8s-deploy  "Create release PR" "Tag and create release draft"
+        github-workflow-dashboard -owner Azure -repo k8s-deploy  "Create release PR" "Tag and create release draft"
 ```
 
 ### Environment variables
@@ -57,6 +59,7 @@ WORKFLOW_TOKEN
 WORKFLOW_OWNER
 WORKFLOW_REPO
 WORKFLOW_LATEST_ONLY
+WORKFLOW_LIMIT
 WORKFLOW_PARSE_PARAMS
 WORKFLOW_FORMAT
 WORKFLOW_SERVER_MOD
