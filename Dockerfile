@@ -8,7 +8,8 @@ RUN go mod download && go mod verify
 
 COPY . .
 
-RUN go build -v -o /usr/local/bin/github-workflow-dashboard ./cmd/...
+# more details on -buildvcs=false flag here: https://github.com/golang/go/issues/51748#issuecomment-1070636297
+RUN go build -v -buildvcs=false -o /usr/local/bin/github-workflow-dashboard ./cmd/...
 
 EXPOSE 8080
 
