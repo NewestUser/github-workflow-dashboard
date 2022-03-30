@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -52,6 +53,7 @@ func (s *Server) Start() error {
 
 	r := mux.NewRouter()
 	r.HandleFunc("/", dashboard(s))
+	r.HandleFunc("/api/{owner}/{repo}/{workflow}", serveWorkflowData(s))
 	r.HandleFunc("/{owner}/{repo}/{workflow}", workflowDashboard(s))
 
 	return http.ListenAndServe(fmt.Sprintf(":%d", s.opts.Port), r)
@@ -103,6 +105,32 @@ func workflowDashboard(server *Server) http.HandlerFunc {
 	}
 
 	return serveWorkflowRuns(metaInfoFunc, workflwoFetcherFunc)
+}
+
+// Serve a specific github workflow data as a json response
+func serveWorkflowData(server *Server) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		params := mux.Vars(r)
+		owner := params["owner"]
+		repo := params["repo"]
+		worfklow := params["workflow"]
+
+		state, err := server.getState()
+		if err != nil {
+			log.Error(err.Error())
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		runs := filterRuns(state.runs, owner, repo, worfklow)
+
+		w.Header().Add("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(runs); err != nil {
+			log.Error(err.Error())
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
 }
 
 func filterRuns(runs []*github.WorkflowRun, owner string, repo string, name string) []*github.WorkflowRun {
