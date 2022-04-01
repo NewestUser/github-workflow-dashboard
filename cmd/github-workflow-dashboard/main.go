@@ -17,13 +17,16 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const Version = "v0.9"
+const Version = "v0.10"
 const ClientName = "github-workflow-dashboard"
+
+const csvSeparator = ","
+const cmdListArgSeparator = ";"
 
 type options struct {
 	token              string
-	owner              string
-	repo               string
+	owners             stringArray
+	repos              stringArray
 	latestOnly         bool
 	limit              int
 	parseParams        bool
@@ -31,31 +34,52 @@ type options struct {
 	serverMod          bool
 	serverPort         int
 	serverPollInterval int
-	workflows          []string
+	workflows          [][]string
 }
 
-func (opts *options) isValid() bool {
-	if opts.owner == "" {
-		return false
+func (opts *options) isValid() (bool, string) {
+	if len(opts.owners) == 0 {
+		return false, "provide at least one owner"
 	}
 
-	if opts.repo == "" {
-		return false
+	for _, owner := range opts.owners {
+		if owner == "" {
+			return false, "owner can't be empty"
+		}
+	}
+
+	if len(opts.repos) == 0 {
+		return false, "provide at least one repo"
+	}
+
+	for _, repo := range opts.repos {
+		if repo == "" {
+			return false, "repo can't be empty"
+		}
+	}
+
+	if len(opts.workflows) == 0 {
+		return false, "provide at least one workflow"
+	}
+
+	if len(opts.owners) != len(opts.repos) || len(opts.owners) != len(opts.workflows) {
+		return false, fmt.Sprintf("number of owners, repos and set of workflows do not match, owners=%d, repos=%d, workflow sets=%d",
+			len(opts.owners), len(opts.repos), len(opts.owners))
 	}
 
 	if opts.limit < 0 {
-		return false
+		return false, fmt.Sprintf("limit must be >= 0, limit=%d", opts.limit)
 	}
 
 	if opts.limit > 1 && opts.latestOnly {
-		return false
+		return false, fmt.Sprintf("can't have both limit > 1 and fetch latest-only, limit=%d", opts.limit)
 	}
 
 	if opts.formatMod != "ascii" && opts.formatMod != "json" {
-		return false
+		return false, fmt.Sprintf(`format "%s" not supported`, opts.formatMod)
 	}
 
-	return true
+	return true, ""
 }
 
 func (opts *options) GetLimit() int {
@@ -72,12 +96,14 @@ func main() {
 	version := fs.Bool("version", false, "Print version and exit")
 
 	opts := &options{
-		workflows: []string{},
+		workflows: [][]string{},
+		owners:    stringArray{},
+		repos:     stringArray{},
 	}
 
 	fs.StringVar(&opts.token, "token", getStrEnv("WORKFLOW_TOKEN"), "Github API token, see: https://docs.github.com/en/articles/creating-an-access-token-for-command-line-use")
-	fs.StringVar(&opts.owner, "owner", getStrEnv("WORKFLOW_OWNER"), "Github repository owner")
-	fs.StringVar(&opts.repo, "repo", getStrEnv("WORKFLOW_REPO"), "Github repository")
+	fs.Var(&opts.owners, "owner", "Github repository owner")
+	fs.Var(&opts.repos, "repo", "Github repository")
 	fs.BoolVar(&opts.latestOnly, "latest-only", getBoolEnvOr("WORKFLOW_LATEST_ONLY", false), "Fetch only the latest run of the github workflow")
 	fs.IntVar(&opts.limit, "limit", getIntEnvOr("WORKFLOW_LIMIT", 0), "Max number of runs to be fetched for each workflow (0 means fetch all)")
 	fs.BoolVar(&opts.parseParams, "parse-params", getBoolEnvOr("WORKFLOW_PARSE_PARAMS", false), "Parse workflow run params from log files")
@@ -98,18 +124,27 @@ func main() {
 		log.Fatal(err)
 	}
 
+	if !isFlagPassed(fs, "owner") {
+		opts.owners = getStrArrayEnv("WORKFLOW_OWNER")
+	}
+	if !isFlagPassed(fs, "repo") {
+		opts.repos = getStrArrayEnv("WORKFLOW_REPO")
+	}
+
 	cliArgs := fs.Args()
 	if len(cliArgs) == 0 {
-		cliArgs = loadEnvVarWorkflows()
+		opts.workflows = loadEnvVarWorkflows()
+	} else {
+		opts.workflows = parseWorkflowCliArgs(cliArgs)
 	}
-	opts.workflows = cliArgs
 
 	if *version {
 		fmt.Printf("Version: %s\n", Version)
 		return
 	}
 
-	if !opts.isValid() {
+	if isValid, msg := opts.isValid(); !isValid {
+		fmt.Printf("error: %s\n\n", msg)
 		fs.Usage()
 		os.Exit(1)
 	}
@@ -127,11 +162,11 @@ func main() {
 }
 
 func executeAsServer(opts *options) error {
-	filter := newWorkflowFilter(opts)
+	filters := newWorkflowFilters(opts)
 
 	srvOpts := &backend.Options{
 		Port:                opts.serverPort,
-		Filter:              filter,
+		Filters:             filters,
 		PollInterval:        time.Duration(opts.serverPollInterval) * time.Minute,
 		LatestOnly:          opts.latestOnly,
 		ParseWorkflowParams: opts.parseParams,
@@ -146,23 +181,27 @@ func executeAsServer(opts *options) error {
 func executeAsCmd(opts *options) error {
 	ctx := context.Background()
 	client := newGithubClient(ctx, opts)
-	filter := newWorkflowFilter(opts)
+	filters := newWorkflowFilters(opts)
 
 	var workflowRuns []*github.WorkflowRun
 	var err error
 
 	if opts.latestOnly {
-		workflowRuns, err = client.FetchLatestWorkflowRuns(ctx, filter)
+		workflowRuns, err = fetchMultiple(ctx, filters, client.FetchLatestWorkflowRuns)
 	} else {
-		workflowRuns, err = client.FetchWorkflowRuns(ctx, filter)
-	}
-
-	if err == nil && opts.parseParams {
-		err = client.EnrichWorkflowRunsWithParams(ctx, filter, workflowRuns)
+		workflowRuns, err = fetchMultiple(ctx, filters, client.FetchWorkflowRuns)
 	}
 
 	if err != nil {
 		return err
+	}
+
+	if opts.parseParams {
+		for _, filter := range filters {
+			if err := client.EnrichWorkflowRunsWithParams(ctx, filter, workflowRuns); err != nil {
+				return err
+			}
+		}
 	}
 
 	result, err := formatCmdOutput(workflowRuns, opts)
@@ -171,6 +210,19 @@ func executeAsCmd(opts *options) error {
 	}
 	fmt.Println(result)
 	return nil
+}
+
+func fetchMultiple(ctx context.Context, filters []*github.WorkflowFilter, fetcher workflowFetcherFunc) ([]*github.WorkflowRun, error) {
+	allRuns := make([]*github.WorkflowRun, 0)
+	for _, filter := range filters {
+		runs, err := fetcher(ctx, filter)
+		if err != nil {
+			return nil, err
+		}
+
+		allRuns = append(allRuns, runs...)
+	}
+	return allRuns, nil
 }
 
 func formatCmdOutput(runs []*github.WorkflowRun, opts *options) (string, error) {
@@ -194,21 +246,91 @@ func newGithubClient(ctx context.Context, opts *options) *github.WorkflowClient 
 	return github.NewWorkflowClient(client)
 }
 
-func newWorkflowFilter(opts *options) *github.WorkflowFilter {
-	return &github.WorkflowFilter{
-		Owner:         opts.owner,
-		Repo:          opts.repo,
-		WorkflowNames: opts.workflows,
-		Limit:         opts.GetLimit(),
+func newWorkflowFilters(opts *options) []*github.WorkflowFilter {
+	filters := make([]*github.WorkflowFilter, 0)
+
+	// repos, owners and workflows should have the same length
+	for i := range opts.repos {
+		owner := opts.owners[i]
+		repo := opts.repos[i]
+		workflows := opts.workflows[i]
+
+		filter := &github.WorkflowFilter{
+			Owner:         owner,
+			Repo:          repo,
+			WorkflowNames: workflows,
+			Limit:         opts.GetLimit(),
+		}
+
+		filters = append(filters, filter)
 	}
+
+	return filters
 }
 
-func loadEnvVarWorkflows() []string {
-	workflowCsv := os.Getenv("WORKFLOW_CSV")
-	if len(workflowCsv) == 0 {
-		return []string{}
+// Parse an environment variable strings that has the format: "foo,bar,zar;far,mar,gar"
+func loadEnvVarWorkflows() [][]string {
+	allWorkflowCsvs := os.Getenv("WORKFLOW_CSV")
+	if len(allWorkflowCsvs) == 0 {
+		return [][]string{}
 	}
-	return strings.Split(os.Getenv("WORKFLOW_CSV"), ",")
+
+	workflowCsvSet := strings.Split(allWorkflowCsvs, cmdListArgSeparator)
+
+	return parseWorkflowCsvs(workflowCsvSet)
+}
+
+func parseWorkflowCliArgs(args []string) [][]string {
+	if isForMultipleRepositories(args) {
+		return parseWorkflowCsvs(args)
+	}
+
+	// the args here are the workflow names of a single repostiory
+	return [][]string{args}
+}
+
+// If the array of arguments passed to the CLI contains "," then this would mean the user intents
+// to pass a set of workflows for different repositoreis.
+func isForMultipleRepositories(args []string) bool {
+	for _, arg := range args {
+		if strings.Contains(arg, csvSeparator) {
+			return true
+		}
+	}
+	return false
+}
+
+// Parse an array of csv strings where each csv represents a set of github workflows for a given repository.
+// Example:
+// 		Input: 	["foo,bar,zar" "far,mar,gar"]
+//		Output:	[ ["foo" "bar" "zar"] ["far" "mar" "gar"] ]
+func parseWorkflowCsvs(csvs []string) [][]string {
+	result := make([][]string, 0)
+
+	for _, csv := range csvs {
+		csvValues := make([]string, 0)
+		for _, value := range strings.Split(csv, csvSeparator) {
+			csvValues = append(csvValues, value)
+		}
+		if len(csvValues) > 0 {
+			result = append(result, csvValues)
+		}
+	}
+
+	return result
+}
+
+func getStrArrayEnv(name string) stringArray {
+	allValues := os.Getenv(name)
+	if len(allValues) == 0 {
+		return stringArray{}
+	}
+
+	arr := stringArray{}
+	for _, value := range strings.Split(allValues, cmdListArgSeparator) {
+		_ = arr.Set(value)
+	}
+	return arr
 }
 
 func getStrEnv(name string) string {
@@ -252,6 +374,29 @@ func getBoolEnvOr(name string, other bool) bool {
 	}
 
 	return boolValue
+}
+
+func isFlagPassed(fs *flag.FlagSet, name string) bool {
+	found := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			found = true
+		}
+	})
+	return found
+}
+
+type workflowFetcherFunc func(context.Context, *github.WorkflowFilter) ([]*github.WorkflowRun, error)
+
+type stringArray []string
+
+func (f *stringArray) String() string {
+	return fmt.Sprintf("%v", *f)
+}
+
+func (f *stringArray) Set(value string) error {
+	*f = append(*f, value)
+	return nil
 }
 
 var example = fmt.Sprintf(`

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"text/template"
+	"html/template"
 	"time"
 
 	"github.com/newestuser/github-workflow-dashboard/github"
@@ -12,11 +12,11 @@ import (
 
 var workflowRunHtmlTmpl = template.Must(template.New("workflowTable").Parse(workflowRunHtml))
 
-func ToHTML(runs []*github.WorkflowRun) (string, error) {
+func ToHTML(runs []*github.WorkflowRun) (template.HTML, error) {
 	return ToHTMLWithCustomLink(runs, func(r *github.WorkflowRun) string { return "" })
 }
 
-func ToHTMLWithCustomLink(runs []*github.WorkflowRun, titleUrlFunc func(*github.WorkflowRun) string) (string, error) {
+func ToHTMLWithCustomLink(runs []*github.WorkflowRun, titleUrlFunc func(*github.WorkflowRun) string) (template.HTML, error) {
 	tableRows := &strings.Builder{}
 
 	dataModel := &multipleWorkflowRunsDataModel{
@@ -29,7 +29,7 @@ func ToHTMLWithCustomLink(runs []*github.WorkflowRun, titleUrlFunc func(*github.
 		return "", err
 	}
 
-	return tableRows.String(), nil
+	return template.HTML(tableRows.String()), nil
 }
 
 type multipleWorkflowRunsDataModel struct {
