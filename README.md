@@ -68,6 +68,32 @@ WORKFLOW_SERVER_POLL_INTERVAL
 WORKFLOW_CSV
 ```
 
+### Tracking multiple repositories
+
+#### Using CLI args
+```shell
+github-workflow-dashboard -owner ownerA -owner ownerB -repo repoA -repo repoB "ownerA_repoA_workflow1,ownerA_repoA_worklow2" "ownerB_repoB_workflow1"
+
+# Example
+github-workflow-dashboard -owner Azure -owner actions -repo k8s-deploy -repo checkout  "Create release PR,Tag and create release draft" "Build and Test"
+```
+
+#### Using environment variables
+```shell
+export WORKFLOW_OWNER="ownerA;ownerB"
+export WORKFLOW_REPO="repoA;repoB"
+export WORKFLOW_CSV="ownerA_repoA_workflow1,ownerA_repoA_worklow2;ownerB_repoB_workflow1"
+
+github-workflow-dashboard
+
+# Example
+export WORKFLOW_OWNER="Azure;actions"
+export WORKFLOW_REPO="k8s-deploy;checkout"
+export WORKFLOW_CSV="Create release PR,Tag and create release draft;Build and Test"
+
+github-workflow-dashboard
+```
+
 ### Running with docker
 
 - Using Make
