@@ -15,7 +15,7 @@ import (
 //2022-02-24T11:10:24.8628366Z   foo: 1234
 //2022-02-24T11:10:24.8629094Z   bar: xyz
 //2022-02-24T11:10:24.8629861Z ##[endgroup]
-var envGroupRegex = regexp.MustCompile(`(?s)env:.*?\[endgroup\]`)
+var envGroupRegex = regexp.MustCompile(`(?s)Z env:.*?\[endgroup\]`)
 
 // used to split a single environment variable new line and extract the key-value pair
 // example:
@@ -53,7 +53,7 @@ func parseJobRunLog(logFile *inMemoryFile) (JobRunParams, error) {
 
 		for i := 0; i < len(newLines); i++ {
 			envLine := newLines[i]
-			if strings.HasPrefix(envLine, "env:") || strings.HasSuffix(envLine, "[endgroup]") {
+			if strings.HasPrefix(envLine, "Z env:") || strings.HasSuffix(envLine, "[endgroup]") {
 				continue
 			}
 
