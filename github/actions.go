@@ -106,7 +106,7 @@ func (c *WorkflowClient) EnrichWorkflowRunsWithParams(ctx context.Context, filte
 	for _, run := range runs {
 		params, err := c.FetchWorkflowRunParams(ctx, filter, run.JobRunID)
 		if err != nil {
-			log.Warn(fmt.Sprintf("Failed fetching workflow params for workflow: %v runId: %d, it will be ommitedd, err: %v", run.WorkflowName, run.JobRunID, err))
+			log.Warn(fmt.Sprintf("failed fetching workflow params for workflow: %s/%s/%v runId: %d, it will be ommited, err: %v", filter.Owner, filter.Repo, run.WorkflowName, run.JobRunID, err))
 		}
 		run.WorkflowParams = params
 	}
@@ -133,7 +133,7 @@ func (c *WorkflowClient) FetchWorkflowRunParams(ctx context.Context, filter *Wor
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%s %s - response: %s %s", req.Method, req.URL, resp.Status, respBody.String())
+		return nil, fmt.Errorf("failed fetching log file from redirect url, %s %s - response: %s %s", req.Method, req.URL, resp.Status, respBody.String())
 	}
 
 	workflowLogs, err := readZip(*respBody)
