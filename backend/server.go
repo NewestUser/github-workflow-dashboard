@@ -31,6 +31,7 @@ func NewServer(client *github.WorkflowClient, opts *Options) *Server {
 		client:     client,
 		opts:       opts,
 		stateMutex: sync.Mutex{},
+		state:      newStateRepo(),
 	}
 }
 
@@ -44,6 +45,12 @@ type Server struct {
 
 type stateRepository struct {
 	data map[RepoId]*repoState
+}
+
+func newStateRepo() *stateRepository {
+	return &stateRepository{
+		data: make(map[RepoId]*repoState),
+	}
 }
 
 func (r *stateRepository) setMulti(newState []*repoState) {
@@ -140,7 +147,7 @@ func (s *Server) Start() error {
 
 	r := mux.NewRouter()
 	r.HandleFunc("/", dashboard(s))
-	
+
 	r.HandleFunc("/api/{owner}", ownerJson(s))
 	r.HandleFunc("/api/{owner}/{repo}", repoJson(s))
 	r.HandleFunc("/api/{owner}/{repo}/{workflow}", workflowJson(s))
@@ -148,7 +155,6 @@ func (s *Server) Start() error {
 	r.HandleFunc("/{owner}", ownerDashboard(s))
 	r.HandleFunc("/{owner}/{repo}", repoDashboard(s))
 	r.HandleFunc("/{owner}/{repo}/{workflow}", workflowDashboard(s))
-
 
 	return http.ListenAndServe(fmt.Sprintf(":%d", s.opts.Port), r)
 }
@@ -302,16 +308,27 @@ func renderDashboard(w http.ResponseWriter, viewModel *dashboardHTMLViewModel) {
 }
 
 func (s *Server) pollGithubWorkflows() {
+	// trigger poll imiediately after which it should be periodic
+	results := s.fetchAllStatesIgnoringErrors(time.Now())
+	s.updateState(results)
+
 	for tick := range time.Tick(s.opts.PollInterval) {
-		results := s.refreshAllStatesIgnoringErrors(tick)
-		s.state.setMulti(results)
+		results := s.fetchAllStatesIgnoringErrors(tick)
+		s.updateState(results)
 	}
 }
 
-func (s *Server) refreshAllStatesIgnoringErrors(uts time.Time) []*repoState {
+func (s *Server) fetchAllStatesIgnoringErrors(uts time.Time) []*repoState {
 	fetchExecTs := time.Now()
 	allResults := make([]*repoState, 0)
-	log.Info("Start fetching state for all repos")
+	allRepos := strings.Builder{}
+
+	for _, f := range s.opts.Filters {
+		allRepos.WriteString(f.GetRepoId().String())
+		allRepos.WriteString(" ")
+	}
+
+	log.Info("Start fetching state for all repos: ", allRepos.String())
 	for _, filter := range s.opts.Filters {
 		repoExecTs := time.Now()
 		ownerAndRepo := fmt.Sprintf("%s/%s", filter.Owner, filter.Repo)
@@ -378,16 +395,19 @@ func filterNames(runs []*github.WorkflowRun) []string {
 }
 
 func (s *Server) getState() (*stateRepository, error) {
-	s.stateMutex.Lock()
-	defer s.stateMutex.Unlock()
-
-	if s.state == nil {
-		s.state = &stateRepository{}
-		results := s.refreshAllStatesIgnoringErrors(time.Now())
-		s.state.setMulti(results)
-	}
-
 	return s.state, nil
+}
+
+func (s *Server) updateState(newState []*repoState) {
+	s.state.setMulti(newState)
+}
+
+func (s *Server) lockState() {
+	s.stateMutex.Lock()
+}
+
+func (s *Server) unlockState() {
+	s.stateMutex.Unlock()
 }
 
 type dashboardHTMLViewModel struct {

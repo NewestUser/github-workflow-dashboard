@@ -56,6 +56,19 @@ type WorkflowFilter struct {
 	Limit         int
 }
 
+func (f WorkflowFilter) GetRepoId() *RepoId {
+	return &RepoId{Owner: f.Owner, Name: f.Repo}
+}
+
+type RepoId struct {
+	Owner string
+	Name  string
+}
+
+func (r RepoId) String() string {
+	return fmt.Sprintf("%s/%s", r.Owner, r.Name)
+}
+
 type WorkflowClient struct {
 	client g.Client
 }

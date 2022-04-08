@@ -17,7 +17,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const Version = "v0.11"
+const Version = "v0.12"
 const ClientName = "github-workflow-dashboard"
 
 const csvSeparator = ","
